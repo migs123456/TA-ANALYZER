@@ -1,0 +1,64 @@
+//@version=5
+indicator("BTCUSDT Dynamic Trendline & Strength Panel", overlay=true)
+
+// --- INPUTS ---
+lookback = input.int(20, "Pivot Lookback (Lower for Scalping)")
+volLength = input.int(10, "Volume Analysis Length")
+panelPos = input.string("Bottom Right", "Panel Position", options=["Top Right", "Bottom Right", "Top Left", "Bottom Left"])
+
+// --- TRENDLINE LOGIC ---
+var line upperTL = na
+var line lowerTL = na
+
+ph = ta.pivothigh(high, lookback, lookback)
+pl = ta.pivotlow(low, lookback, lookback)
+
+if not na(ph)
+    line.delete(upperTL)
+    upperTL := line.new(bar_index[lookback], ph, bar_index, ph, extend=extend.right, color=color.new(color.red, 20), width=2)
+
+if not na(pl)
+    line.delete(lowerTL)
+    lowerTL := line.new(bar_index[lookback], pl, bar_index, pl, extend=extend.right, color=color.new(color.green, 20), width=2)
+
+// --- STRENGTH CALCULATION (ERROR-FREE LOGIC) ---
+float lastUpper = line.get_y2(upperTL)
+float lastLower = line.get_y2(lowerTL)
+
+// 1. Calculate Distance safely
+float rangeTL = (na(lastUpper) or na(lastLower) or lastUpper <= lastLower) ? 1.0 : lastUpper - lastLower
+float distToSupport = ((close - nz(lastLower, close)) / rangeTL) * 100
+float distToResist  = ((nz(lastUpper, close) - close) / rangeTL) * 100
+
+// 2. Volume Factor
+volAvg = ta.sma(volume, volLength)
+float volBias = (not na(volAvg) and volume > volAvg) ? 1.2 : 1.0
+
+// 3. Final Strength with Safety Check
+float rawSupportStr = (100 - distToSupport) * volBias
+float rawResistStr  = (100 - distToResist) * volBias
+
+// Dito natin sinisiguro na 0 to 100 lang ang value at walang 'na'
+float supportStr = math.max(0.0, math.min(100.0, nz(rawSupportStr, 0.0)))
+float resistStr  = math.max(0.0, math.min(100.0, nz(rawResistStr, 0.0)))
+
+// --- DASHBOARD PANEL ---
+var table panel = table.new(
+     panelPos == "Top Right" ? position.top_right : 
+     panelPos == "Bottom Right" ? position.bottom_right : 
+     panelPos == "Top Left" ? position.top_left : position.bottom_left, 
+     2, 3, border_width=1, border_color=color.new(color.gray, 70))
+
+if barstate.islast
+    table.cell(panel, 0, 0, "Level", bgcolor=color.new(color.black, 20), text_color=color.white)
+    table.cell(panel, 1, 0, "Strength %", bgcolor=color.new(color.black, 20), text_color=color.white)
+    
+    table.cell(panel, 0, 1, "SUPPORT", bgcolor=color.new(color.green, 80), text_color=color.green)
+    table.cell(panel, 1, 1, str.tostring(math.round(supportStr, 1)) + "%", bgcolor=supportStr > 75 ? color.green : color.new(color.green, 80), text_color=color.white)
+    
+    table.cell(panel, 0, 2, "RESISTANCE", bgcolor=color.new(color.red, 80), text_color=color.red)
+    table.cell(panel, 1, 2, str.tostring(math.round(resistStr, 1)) + "%", bgcolor=resistStr > 75 ? color.red : color.new(color.red, 80), text_color=color.white)
+
+// --- SIGNALS ---
+plotshape(supportStr > 90, "Strong Support", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(resistStr > 90, "Strong Resist", shape.triangledown, location.abovebar, color.red, size=size.small)
