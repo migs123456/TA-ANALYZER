@@ -1,0 +1,79 @@
+//@version=5
+indicator("Currency Strength & Flow Meter V3.1 (with USDT)", overlay=true)
+
+// --- INPUTS ---
+lookback = input.int(14, "Lookback Period")
+group_name = "Brokers/Suffix"
+suffix = input.string("", "Symbol Suffix (e.g. .ps or .m)", group=group_name)
+
+// --- OPTIMIZED CALCULATION FUNCTIONS ---
+get_rsi(s) => request.security(s, timeframe.period, ta.rsi(close, lookback))
+get_mfi(s) => request.security(s, timeframe.period, ta.mfi(close, lookback))
+
+// --- DATA FETCHING ---
+// Forex (Major Pairs vs USD)
+r_eur = get_rsi("FX:EURUSD" + suffix), m_eur_val = get_mfi("FX:EURUSD" + suffix)
+r_gbp = get_rsi("FX:GBPUSD" + suffix), m_gbp_val = get_mfi("FX:GBPUSD" + suffix)
+r_aud = get_rsi("FX:AUDUSD" + suffix), m_aud_val = get_mfi("FX:AUDUSD" + suffix)
+r_nzd = get_rsi("FX:NZDUSD" + suffix), m_nzd_val = get_mfi("FX:NZDUSD" + suffix)
+r_jpy = get_rsi("FX:USDJPY" + suffix), m_jpy_val = get_mfi("FX:USDJPY" + suffix)
+r_cad = get_rsi("FX:USDCAD" + suffix), m_cad_val = get_mfi("FX:USDCAD" + suffix)
+r_chf = get_rsi("FX:USDCHF" + suffix), m_chf_val = get_mfi("FX:USDCHF" + suffix)
+
+// Commodities & Crypto
+r_gold = get_rsi("OANDA:XAUUSD"), m_gold_val = get_mfi("OANDA:XAUUSD")
+r_btc  = get_rsi("BINANCE:BTCUSD"), m_btc_val = get_mfi("BINANCE:BTCUSD")
+r_usdt = get_rsi("CRYPTOCAP:USDT.D"), m_usdt_val = get_mfi("CRYPTOCAP:USDT.D")
+
+// --- STRENGTH LOGIC ---
+s_usd = ((100-r_eur) + (100-r_gbp) + (100-r_aud) + (100-r_nzd) + r_jpy + r_cad + r_chf) / 7
+s_eur = r_eur
+s_gbp = r_gbp
+s_aud = r_aud
+s_nzd = r_nzd
+s_jpy = 100 - r_jpy
+s_cad = 100 - r_cad
+s_chf = 100 - r_chf
+s_xau = r_gold
+s_btc = r_btc
+s_usdt = r_usdt // USDT Dominance Strength
+
+// --- FLOW LOGIC ---
+get_flow(mfi_val, is_inverted=false) => 
+    val = is_inverted ? 100 - mfi_val : mfi_val
+    val > 50 ? "IN" : "OUT"
+
+f_usd = s_usd > 50 ? "IN" : "OUT"
+f_eur = get_flow(m_eur_val)
+f_gbp = get_flow(m_gbp_val)
+f_jpy = get_flow(m_jpy_val, true)
+f_xau = get_flow(m_gold_val)
+f_btc = get_flow(m_btc_val)
+f_usdt = get_flow(m_usdt_val)
+
+// --- UI PANEL (Table) ---
+var table csm_table = table.new(position.top_right, 3, 12, border_width=1, frame_color=color.new(color.gray, 50))
+
+fill_row(row, name, strength, flow) =>
+    bg_color = strength > 60 ? color.new(color.green, 20) : strength < 40 ? color.new(color.red, 20) : color.new(color.gray, 80)
+    flow_color = flow == "IN" ? color.green : color.red
+    table.cell(csm_table, 0, row, name, text_color=color.white, bgcolor=bg_color)
+    table.cell(csm_table, 1, row, str.tostring(strength, "#.#"), text_color=color.white, bgcolor=bg_color)
+    table.cell(csm_table, 2, row, flow, text_color=flow_color, bgcolor=bg_color)
+
+if barstate.islast
+    table.cell(csm_table, 0, 0, "ASSET", bgcolor=color.black, text_color=color.white)
+    table.cell(csm_table, 1, 0, "PWR", bgcolor=color.black, text_color=color.white)
+    table.cell(csm_table, 2, 0, "FLOW", bgcolor=color.black, text_color=color.white)
+    
+    fill_row(1, "USD", s_usd, f_usd)
+    fill_row(2, "EUR", s_eur, f_eur)
+    fill_row(3, "GBP", s_gbp, f_gbp)
+    fill_row(4, "JPY", s_jpy, f_jpy)
+    fill_row(5, "AUD", s_aud, get_flow(m_aud_val))
+    fill_row(6, "CAD", s_cad, get_flow(m_cad_val, true))
+    fill_row(7, "CHF", s_chf, get_flow(m_chf_val, true))
+    fill_row(8, "NZD", s_nzd, get_flow(m_nzd_val))
+    fill_row(9, "GOLD", s_xau, f_xau)
+    fill_row(10, "BTC", s_btc, f_btc)
+    fill_row(11, "USDT.D", s_usdt, f_usdt)
