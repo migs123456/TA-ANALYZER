@@ -1,0 +1,67 @@
+//@version=5
+indicator("Trendline Direction with Signal Panel", overlay=true)
+
+// --- Inputs ---
+lookback = input.int(10, "Sensitivity (Layo ng Points)")
+show_panel = input.bool(true, "Show Direction Panel")
+
+// --- Pivot Points (Finding Highs and Lows) ---
+ph = ta.pivothigh(high, lookback, lookback)
+pl = ta.pivotlow(low, lookback, lookback)
+
+// Logic for Highs (Resistance)
+var float last_ph_price = na
+var int   last_ph_index = na
+var float prev_ph_price = na
+var int   prev_ph_index = na
+
+if not na(ph)
+    prev_ph_price := last_ph_price
+    prev_ph_index := last_ph_index
+    last_ph_price := ph
+    last_ph_index := bar_index[lookback]
+
+// Logic for Lows (Support)
+var float last_pl_price = na
+var int   last_pl_index = na
+var float prev_pl_price = na
+var int   prev_pl_index = na
+
+if not na(pl)
+    prev_pl_price := last_pl_price
+    prev_pl_index := last_pl_index
+    last_pl_price := pl
+    last_pl_index := bar_index[lookback]
+
+// --- Create & Update Lines ---
+var line res_line = na
+var line sup_line = na
+
+if not na(ph)
+    line.delete(res_line)
+    res_line := line.new(prev_ph_index, prev_ph_price, last_ph_index, last_ph_price, extend=extend.right, color=color.red, width=2)
+
+if not na(pl)
+    line.delete(sup_line)
+    sup_line := line.new(prev_pl_index, prev_pl_price, last_pl_index, last_pl_price, extend=extend.right, color=color.green, width=2)
+
+// --- DIRECTION LOGIC (The "Saan ang Punta?" Logic) ---
+string trend_dir = "SIDEWAYS"
+color  trend_col = color.gray
+
+// Trend is UP if price is above the resistance or making higher lows
+if (not na(last_pl_price) and not na(prev_pl_price) and last_pl_price > prev_pl_price) and (close > last_pl_price)
+    trend_dir := "UPTREND"
+    trend_col := color.green
+// Trend is DOWN if price is below support or making lower highs
+else if (not na(last_ph_price) and not na(prev_ph_price) and last_ph_price < prev_ph_price) and (close < last_ph_price)
+    trend_dir := "DOWNTREND"
+    trend_col := color.red
+
+// --- BIG DIRECTION PANEL ---
+var table panel = table.new(position.top_right, 1, 2, bgcolor=color.new(color.black, 10), border_width=2, border_color=color.gray)
+
+if show_panel and barstate.islast
+    // First Row: Title
+    table.cell(panel, 0, 0, "CURRENT DIRECTION", text_color=color.white, text_size=size.small)
+    // Second Row: Th
